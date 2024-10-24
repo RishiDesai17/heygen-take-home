@@ -4,7 +4,7 @@ import random
 import logging
 from datetime import datetime, timedelta
 
-app = Flask()
+app = Flask(__name__)
 
 # Configurable time for the job to complete
 JOB_COMPLETION_TIME = datetime.now() + timedelta(seconds=10)
