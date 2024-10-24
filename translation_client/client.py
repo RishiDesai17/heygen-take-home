@@ -29,6 +29,8 @@ class TranslationClient:
         self.max_retries = float("inf")
 
         self.logger = logging.getLogger("Translation Client")
+        self._stop_event = threading.Event()
+        self.current_thread = None
 
     def _poll_status(self):
         """
