@@ -17,9 +17,15 @@ class TranslationClient:
         This also gives us room to implement a backoff/jitter mechanism if required.
 
         :param base_url: Base URL of the translation server (e.g., "http://localhost:5000").
-        :param initial_polling_interval: Initial interval (in seconds) between status polls.
-        :param max_retries: Maximum number of retries for polling.
-        :param backoff_factor: Multiplier for backoff strategy (increases interval between polls).
+        
+        initial_polling_interval: Initial interval (in seconds) between status polls.
+        max_retries: Maximum number of retries for polling.
+        backoff_factor: Multiplier for backoff strategy (increases interval between polls).
+        max_interval: Puts a limit on the max interval (in seconds) length when using backoff factor.
+
+        _stop_event: Using it for thread management to have only one thread at a time.
+        current_thread: Keeps a reference to the thread to use it later for destroying if necessary.
+        logger: Reference to the logger.
         """
 
         self.base_url = base_url
