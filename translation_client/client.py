@@ -28,6 +28,10 @@ class TranslationClient:
         # For now, we have no limit (infinite retries), we can change it if we want a limit
         self.max_retries = float("inf")
 
+        # Backoff factor implementation (with maximum possible interval) for when certain types of errors happen
+        self.backoff_factor = 2
+        self.max_interval = 30
+
         self.logger = logging.getLogger("Translation Client")
         self._stop_event = threading.Event()
         self.current_thread = None
@@ -60,7 +64,18 @@ class TranslationClient:
                     self.logger.warning("Unexpected result: %s. Treating as an error.", result)
                     return { "task_completion_status": "error" }
 
-
+            except requests.Timeout:
+                self.logger.warning("Request timed out. Retrying...")
+                curr_interval += min(self.backoff_factor * curr_interval, self.max_interval)
+            except requests.ConnectionError as e:
+                self.logger.warning("Connection error occurred: %s. Retrying...", str(e))
+                curr_interval += min(self.backoff_factor * curr_interval, self.max_interval)
+            except ValueError:
+                self.logger.error("Failed to decode JSON response.")
+                curr_interval += min(self.backoff_factor * curr_interval, self.max_interval)
+            except requests.HTTPError as e:
+                self.logger.error("HTTP error occurred: %s. Response: %s", str(e), response.content)
+                return { "error": True, "message": "An unexpected error occured. Please try again later" }
             except Exception as e:
                 self.logger.error("An unexpected error occurred: %s", str(e))
                 return { "error": True, "message": "An unexpected error occured. Please try again later" }
@@ -85,7 +100,7 @@ class TranslationClient:
 
         result = self._poll_status()
         return result
-    
+
     def check_status_async(self, callback):
         """
         Asynchronous status checking with callback support. Runs the status check in a separate thread.
