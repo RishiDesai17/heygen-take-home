@@ -71,3 +71,16 @@ class TranslationClient:
         self.logger.error("Max retries exceeded. Returning pending state.")
         return { "error": False, "task_completion_status": "pending" }
 
+    def wait_for_completion(self):
+        """
+        Blocking call to wait for job completion.
+        """
+        if self.current_thread and self.current_thread.is_alive():
+            self.logger.info("Stopping the previous thread...")
+            
+            # Stop the previous thread to prevent any chances for the herd tunneling problem or multiple callbacks getting fired.
+            self._stop_event.set()
+
+        result = self._poll_status()
+        return result
+
