@@ -83,4 +83,22 @@ class TranslationClient:
 
         result = self._poll_status()
         return result
+    
+    def check_status_async(self, callback):
+        """
+        Asynchronous status checking with callback support. Runs the status check in a separate thread.
+        """
+        if self.current_thread and self.current_thread.is_alive():
+            self._stop_event.set()  # Stop the previous thread to make sure only one thread for checking the status runs at a given time
 
+        self._stop_event.clear()  # Clear the stop event for the new thread
+        self.current_thread = threading.Thread(target=self._async_poll, args=(callback,))
+        self.current_thread.start()
+
+    def _async_poll(self, callback):
+        """
+        Poll the server for status in a background thread and trigger the callback on completion.
+        """
+        result = self._poll_status()
+        if not self._stop_event.is_set():
+            callback(result)
