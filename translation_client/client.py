@@ -92,7 +92,7 @@ class TranslationClient:
             retries += 1
 
         self.logger.error("Max retries exceeded. Returning pending state.")
-        return { "error": False, "task_completion_status": "pending" }
+        return { "task_completion_status": "pending" }
 
     def wait_for_completion(self):
         """
