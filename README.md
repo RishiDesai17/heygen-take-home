@@ -28,4 +28,7 @@
     pytest -s integration_test.py
     ```
 
+### Documentation
 
+- <a href="https://drive.google.com/file/d/1sG5j-Vj6pqniCFn_jr7axyWixhc7csda/view?usp=drive_link">Technical Approach Document</a>
+- <a href="https://drive.google.com/file/d/157FWhwRexruXAMzSd2dMPef7AoaWJmTw/view?usp=drive_link">Client Library Usage Guide</a>
