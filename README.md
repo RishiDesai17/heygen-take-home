@@ -23,7 +23,7 @@
 
 ### Run
 
-Run the integration test (the server will be initialized by the test):
+- Run the integration test (the server will be initialized by the test):
     ```
     pytest -s integration_test.py
     ```

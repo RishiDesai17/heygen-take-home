@@ -18,6 +18,7 @@ class TranslationClient:
 
         :param base_url: Base URL of the translation server (e.g., "http://localhost:5000").
         
+        At this time, we are not offering these parameters for customers to modify. This decision is to maintain control over the frequency of server pings and to mitigate any associated risks.
         initial_polling_interval: Initial interval (in seconds) between status polls.
         max_retries: Maximum number of retries for polling.
         backoff_factor: Multiplier for backoff strategy (increases interval between polls).
