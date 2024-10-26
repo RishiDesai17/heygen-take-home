@@ -19,11 +19,19 @@ def server_process():
 
 def async_callback(response):
     """Asynchronous callback function for the status check."""
+    result = process_response(response)
+    assert result in ("completed", "error")
+
+def process_response(response):
     if response.get("error"):
-        logger.error(f"Error in fetching the task completion status: {response.get('message')}")
+        logger.error(f"Error in fetching the task completion status: {response.get("message")}")
         return
-    logger.info(f"Result: {response.get('task_completion_status')}")
-    assert response.get("task_completion_status") in ("completed", "error")
+
+    status = response.get('task_completion_status')
+    logger.info(f"Status: {status}")
+    if status == "pending":
+        logger.info("The provided callback function will be executed when the task is not in a pending state anymore")
+    return status
 
 def test_asynchronous_status_check(server_process):
     """Test the asynchronous status check."""
@@ -31,7 +39,8 @@ def test_asynchronous_status_check(server_process):
     client = TranslationClient()
 
     # Initiate the asynchronous status check
-    client.check_status_async(async_callback)
+    current_status_response = client.check_status_async(async_callback)
+    process_response(current_status_response)
 
     # Customer can add additional code here without needing to wait for the status update to finish
 

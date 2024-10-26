@@ -53,12 +53,10 @@ class TranslationClient:
         retries = 0
         curr_interval = self.initial_polling_interval
         while retries < self.max_retries:
-            try:
-                response = requests.get(f"{self.base_url}/status")
-                response.raise_for_status()  # Raise an HTTPError for bad responses
+            response = self._get_status()
 
-                result = response.json().get("result")
-
+            if not response.get("error"):
+                result = response.get("result")
                 if result == "completed":
                     self.logger.info("Job completed successfully.\n")
                     self._stop_event.is_set()
@@ -72,22 +70,10 @@ class TranslationClient:
                 else:
                     self.logger.warning("Unexpected result: %s. Treating as an error.", result)
                     return { "task_completion_status": "error" }
-
-            except requests.Timeout:
-                self.logger.warning("Request timed out. Retrying...")
+            else:
+                if not response.get("retry_with_backoff"):
+                    return { "error": response.get("error"), "message": response.get("message") }
                 curr_interval += min(self.backoff_factor * curr_interval, self.max_interval)
-            except requests.ConnectionError as e:
-                self.logger.warning("Connection error occurred: %s. Retrying...", str(e))
-                curr_interval += min(self.backoff_factor * curr_interval, self.max_interval)
-            except ValueError:
-                self.logger.error("Failed to decode JSON response.")
-                curr_interval += min(self.backoff_factor * curr_interval, self.max_interval)
-            except requests.HTTPError as e:
-                self.logger.error("HTTP error occurred: %s. Response: %s", str(e), response.content)
-                return { "error": True, "message": "An unexpected error occured. Please try again later" }
-            except Exception as e:
-                self.logger.error("An unexpected error occurred: %s", str(e))
-                return { "error": True, "message": "An unexpected error occured. Please try again later" }
 
             # Wait before the next retry and apply the delay to prevent overly frequent polling
             time.sleep(curr_interval)
@@ -96,6 +82,49 @@ class TranslationClient:
 
         self.logger.error("Max retries exceeded. Returning pending state.")
         return { "task_completion_status": "pending" }
+
+    def _get_status(self):
+        try:
+            response = requests.get(f"{self.base_url}/status")
+            response.raise_for_status()  # Raise an HTTPError for bad responses
+            return response.json()
+        except requests.Timeout:
+            self.logger.warning("Request timed out. Retrying...")
+            return {
+                "error": True,
+                "retry_with_backoff": True,
+                "message": "An unexpected error occured. Please try again later"
+            }
+        except requests.ConnectionError as e:
+            self.logger.warning("Connection error occurred: %s. Retrying...", str(e))
+            curr_interval += min(self.backoff_factor * curr_interval, self.max_interval)
+            return {
+                "error": True,
+                "retry_with_backoff": True,
+                "message": "An unexpected error occured. Please try again later"
+            }
+        except ValueError:
+            self.logger.error("Failed to decode JSON response.")
+            curr_interval += min(self.backoff_factor * curr_interval, self.max_interval)
+            return {
+                "error": True,
+                "retry_with_backoff": True,
+                "message": "An unexpected error occured. Please try again later"
+            }
+        except requests.HTTPError as e:
+            self.logger.error("HTTP error occurred: %s. Response: %s", str(e), response.content)
+            return {
+                "error": True,
+                "retry_with_backoff": False,
+                "message": "An unexpected error occured. Please try again later"
+            }
+        except Exception as e:
+            self.logger.error("An unexpected error occurred: %s", str(e))
+            return {
+                "error": True,
+                "retry_with_backoff": False,
+                "message": "An unexpected error occured. Please try again later"
+            }
 
     def wait_for_completion(self):
         """
@@ -112,9 +141,24 @@ class TranslationClient:
             # Stop the previous thread to prevent any chances for the thundering herd problem or multiple callbacks getting fired.
             self._stop_event.set()
 
+        # check once if task is in a pending state or not
+        response = self._get_status()
+        # If we could not fetch the status due to an unexpected error (in which case "retry_with_backoff" would be false), we return the appropriate error message
+        if response.get("error") and not response.get("retry_with_backoff"):
+            return { "error": response.get("error"), "message": response.get("message") }
+
+        result = response.get("result")
+        # If the task is already completed or threw an error, we can return that and we do not need to start the polling mechanism
+        if result == "completed" or result == "error":
+            return { "task_completion_status": result }
+
+        # If the task is in a pending state, we need to start the polling mechanism.
         self._stop_event.clear()
         self.current_thread = threading.Thread(target=self._async_poll, args=(callback,))
         self.current_thread.start()
+
+        # We return the current status (pending). The callback function provided by the customer will be called when the job is completed or throws an error.
+        return { "task_completion_status": "pending" }
 
     def _async_poll(self, callback):
         """
