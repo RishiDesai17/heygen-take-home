@@ -3,6 +3,7 @@ import time
 import logging
 import threading
 import random
+import inspect
 
 class TranslationClient:
     def __init__(self, base_url="http://localhost:5000"):
@@ -137,6 +138,14 @@ class TranslationClient:
         """
         Asynchronous status checking with callback support. Runs the status check in a separate thread.
         """
+        if not callable(callback):
+            raise TypeError("Callback must be a function")
+        
+        # Check if callback has exactly one parameter
+        sig = inspect.signature(callback)
+        if len(sig.parameters) != 1:
+            raise TypeError("Callback function must have exactly one parameter")
+
         if self.current_thread and self.current_thread.is_alive():
             # Stop the previous thread to prevent any chances for the thundering herd problem or multiple callbacks getting fired.
             self._stop_event.set()
@@ -145,7 +154,7 @@ class TranslationClient:
         response = self._get_status()
         # If we could not fetch the status due to an unexpected error (in which case "retry_with_backoff" would be false), we return the appropriate error message
         if response.get("error") and not response.get("retry_with_backoff"):
-            return { "error": response.get("error"), "message": response.get("message") }
+            return RuntimeError(response.get("message"))
 
         result = response.get("result")
         # If the task is already completed or threw an error, we can return that and we do not need to start the polling mechanism
