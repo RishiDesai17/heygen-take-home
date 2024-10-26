@@ -4,9 +4,10 @@ import logging
 import threading
 import random
 import inspect
+from .constants import BASE_URL, INITIAL_POLLING_INTERVAL, MAX_RETRIES, BACKOFF_FACTOR, MAX_INTERVAL, LOGGER_NAME
 
 class TranslationClient:
-    def __init__(self, base_url="http://localhost:5000"):
+    def __init__(self, base_url=BASE_URL):
         """
         Initialize the client library with configurable polling and number of retries.
 
@@ -19,30 +20,31 @@ class TranslationClient:
 
         :param base_url: Base URL of the translation server (e.g., "http://localhost:5000").
         
-        At this time, we are not offering these parameters for customers to modify. This decision is to
-        maintain control over the frequency of server pings and to mitigate any associated risks.
+        At this time, we are not offering the following variables for customers to modify. This decision is to
+        maintain control over the frequency of server pings and to mitigate any associated risks with letting the customer control that.
+        (For future scope, another idea is letting user provide the following, but imposing limits on each parameter and validating it.)
 
         initial_polling_interval: Initial interval (in seconds) between status polls.
         max_retries: Maximum number of retries for polling.
         backoff_factor: Multiplier for backoff strategy (increases interval between polls).
         max_interval: Puts a limit on the max interval (in seconds) length when using backoff factor.
 
+        The following are used for threads and logging
         _stop_event: Using it for thread management.
         current_thread: Keeps a reference to the thread to use it later for destroying if necessary.
         logger: Reference to the logger.
         """
 
         self.base_url = base_url
-        self.initial_polling_interval = 1
+        self.initial_polling_interval = INITIAL_POLLING_INTERVAL
 
-        # For now, we have no limit (infinite retries), we can change it if we want a limit
-        self.max_retries = float("inf")
+        self.max_retries = MAX_RETRIES
 
         # Backoff factor implementation (with maximum possible interval) for when certain types of errors happen
-        self.backoff_factor = 2
-        self.max_interval = 30
+        self.backoff_factor = BACKOFF_FACTOR
+        self.max_interval = MAX_INTERVAL
 
-        self.logger = logging.getLogger("Translation Client")
+        self.logger = logging.getLogger(LOGGER_NAME)
         self._stop_event = threading.Event()
         self.current_thread = None
 
@@ -67,9 +69,9 @@ class TranslationClient:
                     self._stop_event.is_set()
                     return { "task_completion_status": result }
                 elif result == "pending":
-                    self.logger.info("Job is still pending.\n")
+                    self.logger.info("Job is in pending state.\n")
                 else:
-                    self.logger.warning("Unexpected result: %s. Treating as an error.", result)
+                    self.logger.warning("Unexpected result: %s. Treating as an error.\n", result)
                     return { "task_completion_status": "error" }
             else:
                 if not response.get("retry_with_backoff"):
@@ -81,7 +83,7 @@ class TranslationClient:
             curr_interval = self.initial_polling_interval + random.randint(1, 4)
             retries += 1
 
-        self.logger.error("Max retries exceeded. Returning pending state.")
+        self.logger.error("Max retries exceeded. Returning pending state.\n")
         return { "task_completion_status": "pending" }
 
     def _get_status(self):
