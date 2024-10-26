@@ -99,14 +99,8 @@ class TranslationClient:
 
     def wait_for_completion(self):
         """
-        Blocking call to wait for job completion.
+        Blocking call to wait for job completion. Runs the status check in the same thread.
         """
-        if self.current_thread and self.current_thread.is_alive():
-            self.logger.info("Stopping the previous thread...")
-            
-            # Stop the previous thread to prevent any chances for the herd tunneling problem or multiple callbacks getting fired.
-            self._stop_event.set()
-
         result = self._poll_status()
         return result
 
@@ -115,9 +109,10 @@ class TranslationClient:
         Asynchronous status checking with callback support. Runs the status check in a separate thread.
         """
         if self.current_thread and self.current_thread.is_alive():
-            self._stop_event.set()  # Stop the previous thread to make sure only one thread for checking the status runs at a given time
+            # Stop the previous thread to prevent any chances for the thundering herd problem or multiple callbacks getting fired.
+            self._stop_event.set()
 
-        self._stop_event.clear()  # Clear the stop event for the new thread
+        self._stop_event.clear()
         self.current_thread = threading.Thread(target=self._async_poll, args=(callback,))
         self.current_thread.start()
 
